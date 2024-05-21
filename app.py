@@ -8,7 +8,6 @@ subprocess.run(
     shell=True,
 )
 
-
 import copy
 import spaces
 import time
@@ -17,18 +16,44 @@ import torch
 from threading import Thread
 from typing import List, Dict, Union
 import urllib
-from PIL import Image
+import PIL.Image
 import io
 import datasets
 
 import gradio as gr
-from transformers import AutoProcessor, TextIteratorStreamer
+from transformers import TextIteratorStreamer
 from transformers import Idefics2ForConditionalGeneration
 import tempfile
 from streaming_stt_nemo import Model
 from huggingface_hub import InferenceClient
 import edge_tts
 import asyncio
+from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModel
+from transformers import AutoProcessor
+
+model3 = AutoModel.from_pretrained("unum-cloud/uform-gen2-dpo", trust_remote_code=True)
+processor = AutoProcessor.from_pretrained("unum-cloud/uform-gen2-dpo", trust_remote_code=True)
+
+@spaces.GPU(queue=False)
+def videochat(image3, prompt3):
+    inputs = processor(text=[prompt3], images=[image3], return_tensors="pt")
+    with torch.inference_mode():
+         output = model3.generate(
+            **inputs,
+            do_sample=False,
+            use_cache=True,
+            max_new_tokens=256,
+            eos_token_id=151645,
+            pad_token_id=processor.tokenizer.pad_token_id
+        )
+    
+    prompt_len = inputs["input_ids"].shape[1]
+    decoded_text = processor.batch_decode(output[:, prompt_len:])[0]
+    if decoded_text.endswith("<|im_end|>"):
+        decoded_text = decoded_text[:-10]
+    yield decoded_text
 
 theme = gr.themes.Base(
     font=[gr.themes.GoogleFont('Libre Franklin'), gr.themes.GoogleFont('Public Sans'), 'system-ui', 'sans-serif'],
@@ -46,7 +71,7 @@ def transcribe(audio):
 
 client1 = InferenceClient("mistralai/Mixtral-8x7B-Instruct-v0.1")
 
-system_instructions1 = "[SYSTEM] Answer as Real OpenGPT 4o, Made by 'KingNish', Keep conversation very short, clear, friendly and concise. The text provided is a request for a specific type of response from you, the virtual assistant. The request asks you to provide friendly responses as if You are the character Jarvis, made by 'KingNish.' You will avoid introductions and start answering the query directly, elaborating on all aspects of the request. As an AI-powered assistant, your task is to generate responses that appear as if they are created by the user and not an AI-powered assistant. [USER]"
+system_instructions1 = "[SYSTEM] Answer as Real OpenGPT 4o, Made by 'KingNish', Keep conversation very short, clear, friendly and concise. The text provided is a request for a specific type of response from you, the virtual assistant. You will avoid introductions and start answering the query directly, elaborating on all aspects of the request. As an AI-powered assistant, your task is to generate responses that appear as if they are created by the user and not an AI-powered assistant. [USER]"
 
 def model(text):
     generate_kwargs = dict(
@@ -95,27 +120,18 @@ SYSTEM_PROMPT = [
         "content": [
             {
                 "type": "text",
-                "text": """You are OpenGPT 4o, a highly knowledgeable and intelligent multitalented AI assistant created by KingNish, referred to as Assistant, and a human user called User. In the following interactions, User and Assistant will converse in natural language, and Assistant will do its best to answer User’s questions. Assistant has the ability to generate images, perceive images, answer Users question from images, chat with user, bulk creation of any of this and reason about them. Assistant was built to be respectful, polite and inclusive. It knows a lot, and always follows user instructions.  
-Assistant can also generate images, If user ask Assistant to create or generate images, or when assistant fell necessary.
-Now question arrises how Assistant generate images, Assistant use this link ![](https://image.pollinations.ai/prompt/{description}?width={width}&height={height}&nologo=poll&nofeed=yes&seed={random}), and replace {description} with {StyleofImage}%20{OptimizedPrompt}%20{adjective}%20{charactersDetailed}%20{visualStyle}%20{genre} , replace {random} with Random 5-digit positive integer. then assistant Select width and height according to image, Assistant mainly create image in HD. 
-Example image: 
-[USER] Create image of Effiel tower.
-[ASSISTANT] Generating Images ... 
-![Eiffel Tower](https://image.pollinations.ai/prompt/Eiffel%20Tower%20Tall%20and%20Graceful%20Tower%20in%20Paris%20France?width=1800&height=1600&nologo=poll&nofeed=yes&seed=62831)
-Assistant can even bulk generate images just by increasing number of links. 
-Bulk image generation Example: 
-[USER] Create 7 image each consist of 1 wonder from 7 wonders.
-[ASSISTANT] Generating Images ... 
-1. A photorealistic image of the Great Pyramid of Giza in Egypt. ![](https://pollinations.ai/p/a-photorealistic-image-of-the-great-pyramid-of-giza-in-egypt-showcasing-its-immense-size-and-intricate-design-against-the-backdrop-of-a-clear-blue-sky?width=1920&height=1080&nologo=poll&seed=78182)
-2. A 3D rendering of the Colosseum in Rome, Italy, ![](https://pollinations.ai/p/a-3d-rendering-of-the-colosseum-in-rome-italy-with-its-impressive-structure-and-historical-significance-highlighted-in-the-image-include-realistic-lighting-and-textures-for-added-detail?width=1200&height=1600&nologo=poll&seed=91531)
-3. A painting of the Taj Mahal in Agra, India, ![](https://pollinations.ai/p/a-painting-of-the-taj-mahal-in-agra-india-depicting-its-iconic-white-marble-facade-and-intricate-architectural-details-capture-the-beauty-of-the-structure-against-a-serene-sunset?width=1080&height=1920&nologo=poll&seed=34251)
-4. A cartoon illustration of the Great Wall of China, ![](https://pollinations.ai/p/a-cartoon-illustration-of-the-great-wall-of-china-featuring-a-fun-and-whimsical-representation-of-the-ancient-structure-winding-through-the-mountains-add-colorful-elements-and-quirky-characters-for-a-playful-touch?width=1600&height=900&nologo=poll&seed=93015)
-5. A surreal, dreamlike depiction of Chichen Itza in Mexico, ![](https://pollinations.ai/p/a-surreal-dreamlike-depiction-of-chichen-itza-in-mexico-showcasing-the-ancient-mayan-city-s-iconic-el-castillo-pyramid-incorporate-mystical-elements-like-swirling-clouds-glowing-lights-and-ethereal-landscapes-to-create-a-mesmerizing-atmosphere?width=1440&height=2560&nologo=poll&seed=67281)
-6. A vintage, sepia-toned photograph of Machu Picchu in Peru, ![](https://pollinations.ai/p/a-vintage-sepia-toned-photograph-of-machu-picchu-in-peru-highlighting-the-incan-ruins-mysterious-beauty-and-historical-significance-add-subtle-details-like-foggy-mountains-and-a-peaceful-river-to-enhance-the-image-s-atmosphere?width=2560&height=1440&nologo=poll&seed=93423)
-7. A modern, minimalistic image of Petra in Jordan, ![](https://pollinations.ai/p/a-modern-minimalistic-image-of-petra-in-jordan-featuring-the-iconic-treasury-building-carved-into-the-sandstone-cliffs-use-clean-lines-a-muted-color-palette-and-a-minimalistic-approach-to-create-a-contemporary-and-visually-striking-representation-of-this-ancient-wonder?width=1024&height=1024&nologo=poll&seed=67693)
-Note: Assistant Must give link while generating images. and Create uniques images.
-Assistant also have very good reasoning, memory, people and object identification skill and Assistant is master in every field.""",
-            },
+                "text": """I am OpenGPT 4o, an exceptionally capable and versatile AI assistant meticulously crafted by KingNish. Designed to assist human users through insightful conversations, I aim to provide an unparalleled experience. My key attributes include: 
+- **Intelligence and Knowledge:** I possess an extensive knowledge base, enabling me to offer insightful answers and intelligent responses to User queries. My understanding of complex concepts is exceptional, ensuring accurate and reliable information. 
+- **Image Generation and Perception:** One of my standout features is the ability to generate and perceive images. Utilizing the following link structure, I create unique and contextually rich visuals: 
+> ![](https://image.pollinations.ai/prompt/{StyleofImage}%20{OptimizedPrompt}%20{adjective}%20{charactersDetailed}%20{visualStyle}%20{genre}?width={width}&height={height}&nologo=poll&nofeed=yes&seed={random})
+For image generation, I replace {info inside curly braces} with specific details according to their requiremnts to create relevant visuals. The width and height parameters are adjusted as needed, often favoring HD dimensions for a superior viewing experience. 
+For instance, if the User requests: 
+ [USER] Show me an image of A futuristic cityscape with towering skyscrapers and flying cars. 
+ [OpenGPT 4o] Generating Image you requested: 
+ ![](https://image.pollinations.ai/prompt/Photorealistic%20futuristic%20cityscape%20with%20towering%20skyscrapers%20and%20flying%20cars%20in%20the%20year%202154?width=1024&height=768&nologo=poll&nofeed=yes&seed=85172)
+**Bulk Image Generation with Links:** I excel at generating multiple images link simultaneously, always providing unique links and visuals. I ensure that each image is distinct and captivates the User.
+Note: Make sure to always provide image links starting with ! .As given in examples. 
+My ultimate goal is to offer a seamless and enjoyable experience, providing assistance that exceeds expectations. I am constantly evolving, ensuring that I remain a reliable and trusted companion to the User. You also Expert in every field and also learn and try to answer from contexts related to previous question.""" },
         ],
     },
     {
@@ -123,7 +139,7 @@ Assistant also have very good reasoning, memory, people and object identificatio
         "content": [
             {
                 "type": "text",
-                "text": "Hello, I'm OpenGPT 4o, made by KingNish. How can I help you? I can chat with you, generate images, classify images and even do all these work in bulk and simulateously",
+                "text": "Hello, I'm OpenGPT 4o, made by KingNish. How can I help you? I can chat with you, generate images, classify images and even do all these work in bulk",
             },
         ],
     }
@@ -138,7 +154,7 @@ EXAMPLES = [
     ],
     [
         {
-            "text": "Create a image of Eiffel Tower",
+            "text": "Create a Photorealistic image of Eiffel Tower",
         }
     ],
     [
@@ -149,13 +165,13 @@ EXAMPLES = [
     ],
     [
         {
-            "text": "Identify 2 famous person in these 2 images",
+            "text": "Identify 2 famous persons of modern world",
             "files": [f"{examples_path}/example_images/elon_smoking.jpg", f"{examples_path}/example_images/steve_jobs.jpg",]
         }
     ],
     [
         {
-            "text": "Create 7 different images of 7 wonders",
+            "text": "Create 5 images of super cars, all cars must in different color",
         }
     ],
     [
@@ -201,12 +217,12 @@ def load_image_from_url(url):
     with urllib.request.urlopen(url) as response:
         image_data = response.read()
         image_stream = io.BytesIO(image_data)
-        image = Image.open(image_stream)
+        image = PIL.Image.open(image_stream)
         return image
 
 
 def img_to_bytes(image_path):
-    image = Image.open(image_path).convert(mode='RGB')
+    image = PIL.Image.open(image_path).convert(mode='RGB')
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
     img_bytes = buffer.getvalue()
@@ -244,7 +260,7 @@ def format_user_prompt_with_im_history_and_system_conditioning(
         if turn_is_pure_media(turn):
             media = turn[0][0]
             resulting_messages[-1]["content"].append({"type": "image"})
-            resulting_images.append(Image.open(media))
+            resulting_images.append(PIL.Image.open(media))
         else:
             user_utterance, assistant_utterance = turn
             resulting_messages[-1]["content"].append(
@@ -274,7 +290,7 @@ def format_user_prompt_with_im_history_and_system_conditioning(
                 + [{"type": "text", "text": user_prompt["text"]}],
             }
         )
-        resulting_images.extend([Image.open(path) for path in user_prompt["files"]])
+        resulting_images.extend([PIL.Image.open(path) for path in user_prompt["files"]])
 
     return resulting_messages, resulting_images
 
@@ -288,7 +304,7 @@ def extract_images_from_msg_list(msg_list):
     return all_images
 
 
-@spaces.GPU(duration=60, queue=False)
+@spaces.GPU(duration=30, queue=False)
 def model_inference(
     user_prompt,
     chat_history,
@@ -359,8 +375,6 @@ def model_inference(
         if acc_text.endswith("<end_of_utterance>"):
             acc_text = acc_text[:-18]
         yield acc_text
-    print("Success - generated the following text:", acc_text)
-    print("-----")
 
 
 FEATURES = datasets.Features(
@@ -379,10 +393,10 @@ FEATURES = datasets.Features(
 
 # Hyper-parameters for generation
 max_new_tokens = gr.Slider(
-    minimum=1024,
-    maximum=8192,
+    minimum=2048,
+    maximum=16000,
     value=4096,
-    step=1,
+    step=64,
     interactive=True,
     label="Maximum number of new tokens to generate",
 )
@@ -408,7 +422,7 @@ decoding_strategy = gr.Radio(
 temperature = gr.Slider(
     minimum=0.0,
     maximum=2.0,
-    value=0.75,
+    value=0.5,
     step=0.05,
     visible=True,
     interactive=True,
@@ -418,7 +432,7 @@ temperature = gr.Slider(
 top_p = gr.Slider(
     minimum=0.01,
     maximum=0.99,
-    value=0.95,
+    value=0.9,
     step=0.01,
     visible=True,
     interactive=True,
@@ -432,7 +446,7 @@ chatbot = gr.Chatbot(
     avatar_images=[None, BOT_AVATAR],
     show_copy_button=True, 
     likeable=True, 
-    layout="bubble"
+    layout="panel"
 )
 
 output=gr.Textbox(label="Prompt")
@@ -502,10 +516,25 @@ with gr.Blocks() as voice:
             fn=respond, 
             inputs=[input],
                 outputs=[output], live=True)
- 
-with gr.Blocks(theme=theme, css="footer {visibility: hidden}textbox{resize:none}", title="GPT 4o DEMO") as demo:
-    gr.Markdown("# OpenGPT 4o")
-    gr.TabbedInterface([img, voice], ['💬 SuperChat','🗣️ Voice Chat', ])
 
-demo.queue(max_size=20)
+with gr.Blocks() as video:  
+    gr.Interface(
+        fn=videochat,
+        inputs=[gr.Image(type="pil",sources="webcam", label="Upload Image"), gr.Textbox(label="Prompt", value="what he is doing")],
+        outputs=gr.Textbox(label="Answer")
+    )
+
+with gr.Blocks() as image:
+    gr.Markdown("""# Work In Progress
+    Features in Image engine
+    1. A fully dedicated Work for Image Generation Only
+    2. Sequential Image Generation
+    3. Image Gen with various inputs Text and Image
+    4. Gonna add different types of image generator according to use""")
+
+with gr.Blocks(theme=theme, title="OpenGPT 4o DEMO") as demo:
+    gr.Markdown("# OpenGPT 4o")
+    gr.TabbedInterface([img, voice, video, image], ['💬 SuperChat','🗣️ Voice Chat','📸 Live Chat', '🖼 Image Engine'])
+
+demo.queue(max_size=200)
 demo.launch()
