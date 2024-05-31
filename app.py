@@ -1,5 +1,6 @@
 import os
 import subprocess
+import random
 
 # Install flash attention
 subprocess.run(
@@ -19,12 +20,11 @@ import urllib
 import PIL.Image
 import io
 import datasets
-
+from streaming_stt_nemo import Model as nemo
 import gradio as gr
 from transformers import TextIteratorStreamer
 from transformers import Idefics2ForConditionalGeneration
 import tempfile
-from streaming_stt_nemo import Model
 from huggingface_hub import InferenceClient
 import edge_tts
 import asyncio
@@ -55,13 +55,24 @@ def videochat(image3, prompt3):
         decoded_text = decoded_text[:-10]
     yield decoded_text
 
-theme = gr.themes.Base(
-    font=[gr.themes.GoogleFont('Libre Franklin'), gr.themes.GoogleFont('Public Sans'), 'system-ui', 'sans-serif'],
-)
+theme = gr.themes.Soft(
+    primary_hue="blue",
+    secondary_hue="orange",
+    neutral_hue="gray",
+    font=[gr.themes.GoogleFont('Libre Franklin'), gr.themes.GoogleFont('Public Sans'), 'system-ui', 'sans-serif']).set(
+        body_background_fill_dark="#111111",
+        block_background_fill_dark="#111111",
+        block_border_width="1px",
+        block_title_background_fill_dark="#1e1c26",
+        input_background_fill_dark="#292733",
+        button_secondary_background_fill_dark="#24212b",
+        border_color_primary_dark="#343140",
+        background_fill_secondary_dark="#111111",
+        color_accent_soft_dark="transparent")
 
 default_lang = "en"
 
-engines = { default_lang: Model(default_lang) }
+engines = { default_lang: nemo(default_lang) }
 
 def transcribe(audio):
     lang = "en"
@@ -69,22 +80,41 @@ def transcribe(audio):
     text = model.stt_file(audio)[0]
     return text
 
-client1 = InferenceClient("mistralai/Mixtral-8x7B-Instruct-v0.1")
+HF_TOKEN = os.environ.get("HF_TOKEN", None)
+
+def client_fn(model):
+    if "Nous" in model:
+        return InferenceClient("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
+    elif "Star" in model:
+        return InferenceClient("HuggingFaceH4/starchat2-15b-v0.1")
+    elif "Mistral" in model:
+        return InferenceClient("mistralai/Mistral-7B-Instruct-v0.3")
+    elif "Phi" in model:
+        return InferenceClient("microsoft/Phi-3-mini-4k-instruct")
+    elif "Zephyr" in model:
+        return InferenceClient("HuggingFaceH4/zephyr-7b-beta")
+    else: 
+        return InferenceClient("mistralai/Mixtral-8x7B-Instruct-v0.1")
+
+def randomize_seed_fn(seed: int) -> int:
+    seed = random.randint(0, 999999)
+    return seed
 
 system_instructions1 = "[SYSTEM] Answer as Real OpenGPT 4o, Made by 'KingNish', Keep conversation very short, clear, friendly and concise. The text provided is a request for a specific type of response from you, the virtual assistant. You will avoid introductions and start answering the query directly, elaborating on all aspects of the request. As an AI-powered assistant, your task is to generate responses that appear as if they are created by the user and not an AI-powered assistant. [USER]"
 
-def model(text):
+def models(text, model="Mixtral 8x7B", seed=42):
+
+    seed = int(randomize_seed_fn(seed))
+    generator = torch.Generator().manual_seed(seed)  
+    
+    client = client_fn(model)
     generate_kwargs = dict(
-        temperature=0.7,
         max_new_tokens=512,
-        top_p=0.95,
-        repetition_penalty=1,
-        do_sample=True,
-        seed=42,
+        seed=seed,
     )
     
     formatted_prompt = system_instructions1 + text + "[OpenGPT 4o]"
-    stream = client1.text_generation(
+    stream = client.text_generation(
         formatted_prompt, **generate_kwargs, stream=True, details=True, return_full_text=False)
     output = ""
     for response in stream:
@@ -93,9 +123,9 @@ def model(text):
 
     return output
 
-async def respond(audio):
+async def respond(audio, model, seed):
     user = transcribe(audio)
-    reply = model(user)
+    reply = models(user, model, seed)
     communicate = edge_tts.Communicate(reply)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
         tmp_path = tmp_file.name
@@ -106,7 +136,7 @@ DEVICE = torch.device("cuda")
 MODELS = {
     "idefics2-8b-chatty": Idefics2ForConditionalGeneration.from_pretrained(
         "HuggingFaceM4/idefics2-8b-chatty",
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,
         _attn_implementation="flash_attention_2",
     ).to(DEVICE),
 }
@@ -149,34 +179,34 @@ examples_path = os.path.dirname(__file__)
 EXAMPLES = [
     [
         {
-            "text": "Hi, who are you",
+            "text": "Hi, who are you?",
         }
     ],
     [
         {
-            "text": "Create a Photorealistic image of Eiffel Tower",
+            "text": "Create a Photorealistic image of the Eiffel Tower.",
         }
     ],
     [
         {
-            "text": "Read what's written on the paper",
+            "text": "Read what's written on the paper.",
             "files": [f"{examples_path}/example_images/paper_with_text.png"],
         }
     ],
     [
         {
-            "text": "Identify 2 famous persons of modern world",
+            "text": "Identify two famous people in the modern world.",
             "files": [f"{examples_path}/example_images/elon_smoking.jpg", f"{examples_path}/example_images/steve_jobs.jpg",]
         }
     ],
     [
         {
-            "text": "Create 5 images of super cars, all cars must in different color",
+            "text": "Create five images of supercars, each in a different color.",
         }
     ],
     [
         {
-            "text": "What is 900*900",
+            "text": "What is 900 multiplied by 900?",
         }
     ],
     [
@@ -187,13 +217,13 @@ EXAMPLES = [
     ],
     [
         {
-            "text": "Write an online ad for that product.",
+            "text": "Create an online ad for this product.",
             "files": [f"{examples_path}/example_images/shampoo.jpg"],
         }
     ],
     [
         {
-            "text": "What is formed by the deposition of either the weathered remains of other rocks?",
+            "text": "What is formed by the deposition of the weathered remains of other rocks?",
             "files": [f"{examples_path}/example_images/ai2d_example.jpeg"],
         }
     ],    
@@ -234,8 +264,7 @@ def format_user_prompt_with_im_history_and_system_conditioning(
     user_prompt, chat_history
 ) -> List[Dict[str, Union[List, str]]]:
     """
-    Produces the resulting list that needs to go inside the processor.
-    It handles the potential image(s), the history and the system conditionning.
+    Produce the resulting list that needs to go inside the processor. It handles the potential image(s), the history, and the system conditioning.
     """
     resulting_messages = copy.deepcopy(SYSTEM_PROMPT)
     resulting_images = []
@@ -316,10 +345,10 @@ def model_inference(
     top_p,
 ):
     if user_prompt["text"].strip() == "" and not user_prompt["files"]:
-        gr.Error("Please input a query and optionally image(s).")
+        gr.Error("Please input a query and optionally an image(s).")
 
     if user_prompt["text"].strip() == "" and user_prompt["files"]:
-        gr.Error("Please input a text query along the image(s).")
+        gr.Error("Please input a text query along with the image(s).")
 
     streamer = TextIteratorStreamer(
         PROCESSOR.tokenizer,
@@ -417,7 +446,7 @@ decoding_strategy = gr.Radio(
     value="Top P Sampling",
     label="Decoding strategy",
     interactive=True,
-    info="Higher values is equivalent to sampling more low-probability tokens.",
+    info="Higher values are equivalent to sampling more low-probability tokens.",
 )
 temperature = gr.Slider(
     minimum=0.0,
@@ -437,7 +466,7 @@ top_p = gr.Slider(
     visible=True,
     interactive=True,
     label="Top P",
-    info="Higher values is equivalent to sampling more low-probability tokens.",
+    info="Higher values are equivalent to sampling more low-probability tokens.",
 )
 
 
@@ -454,7 +483,7 @@ output=gr.Textbox(label="Prompt")
 with gr.Blocks(
     fill_height=True,
     css=""".gradio-container .avatar-container {height: 40px width: 40px !important;} #duplicate-button {margin: auto; color: white; background: #f1a139; border-radius: 100vh; margin-top: 2px; margin-bottom: 2px;}""",
-) as img:
+) as chat:
 
     gr.Markdown("# Image Chat, Image Generation, Image classification and Normal Chat")
     with gr.Row(elem_id="model_selector_row"):
@@ -506,35 +535,56 @@ with gr.Blocks(
     )
 
 with gr.Blocks() as voice:   
-    with gr.Row():
-        input = gr.Audio(label="Voice Chat", sources="microphone", type="filepath", waveform_options=False)
-        output = gr.Audio(label="OpenGPT 4o", type="filepath",
+     with gr.Row():
+        select = gr.Dropdown([ 'Nous Hermes Mixtral 8x7B DPO', 'Mixtral 8x7B','StarChat2 15b','Mistral 7B v0.3','Phi 3 mini', 'Zephyr 7b' ], value="Mistral 7B v0.3", label="Select Model")
+        seed = gr.Slider(
+        label="Seed",
+        minimum=0,
+        maximum=999999,
+        step=1,
+        value=0,
+        visible=False
+        )
+        input = gr.Audio(label="User", sources="microphone", type="filepath", waveform_options=False)
+        output = gr.Audio(label="AI", type="filepath",
                         interactive=False,
                         autoplay=True,
                         elem_classes="audio")
         gr.Interface(
             fn=respond, 
-            inputs=[input],
-                outputs=[output], live=True)
+            inputs=[input, select,seed],
+                outputs=[output], api_name="translate", live=True)
 
-with gr.Blocks() as video:  
+with gr.Blocks() as livechat:  
     gr.Interface(
         fn=videochat,
         inputs=[gr.Image(type="pil",sources="webcam", label="Upload Image"), gr.Textbox(label="Prompt", value="what he is doing")],
         outputs=gr.Textbox(label="Answer")
     )
 
+with gr.Blocks() as instant:
+    gr.HTML("<iframe src='https://kingnish-sdxl-flash.hf.space' width='100%' height='2000px' style='border-radius: 8px;'></iframe>")
+
+with gr.Blocks() as dalle:
+    gr.HTML("<iframe src='https://kingnish-image-gen-pro.hf.space' width='100%' height='2000px' style='border-radius: 8px;'></iframe>")
+
 with gr.Blocks() as image:
-    gr.Markdown("""# Work In Progress
-    Features in Image engine
-    1. A fully dedicated Work for Image Generation Only
-    2. Sequential Image Generation
-    3. Image Gen with various inputs Text and Image
-    4. Gonna add different types of image generator according to use""")
+    gr.Markdown("""### More models are coming""")
+    gr.TabbedInterface([ instant, dalle], ['Instant🖼️','Powerful🖼️'])    
+
+
+
+
+with gr.Blocks() as instant2:
+    gr.HTML("<iframe src='https://kingnish-instant-video.hf.space' width='100%' height='3000px' style='border-radius: 8px;'></iframe>")
+
+with gr.Blocks() as video:
+    gr.Markdown("""More Models are coming""")
+    gr.TabbedInterface([ instant2], ['Instant🎥'])   
 
 with gr.Blocks(theme=theme, title="OpenGPT 4o DEMO") as demo:
     gr.Markdown("# OpenGPT 4o")
-    gr.TabbedInterface([img, voice, video, image], ['💬 SuperChat','🗣️ Voice Chat','📸 Live Chat', '🖼 Image Engine'])
+    gr.TabbedInterface([chat, voice, livechat, image, video], ['💬 SuperChat','🗣️ Voice Chat','📸 Live Chat', '🖼️ Image Engine', '🎥 Video Engine'])
 
-demo.queue(max_size=200)
+demo.queue(max_size=300)
 demo.launch()
