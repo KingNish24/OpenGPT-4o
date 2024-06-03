@@ -19,4 +19,4 @@ GPT 4o vs OpenGPT 4o
 | Speed                 | 345 ms                | 2 second (Also Depends on queue)             |
 | Customization         | Limited               | High (Coming Soon)                 |
 | Learning Capability   | Continuous            | Static                |
-|Privacy|Questionable|100%|
+|Web Search|Yes|Yes|
