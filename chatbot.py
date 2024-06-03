@@ -67,7 +67,7 @@ examples_path = os.path.dirname(__file__)
 EXAMPLES = [
     [
         {
-            "text": "Hi, who are you?",
+            "text": "Apple share price live",
         }
     ],
     [
@@ -95,7 +95,7 @@ EXAMPLES = [
     ],
     [
         {
-            "text": "What is 900 multiplied by 900?",
+            "text": "Today AI News",
         }
     ],
     [
