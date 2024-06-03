@@ -7,3 +7,6 @@ streaming-stt-nemo==0.2.0
 edge-tts
 asyncio
 torchvision
+accelerate
+beautifulsoup4>=4.9
+requests>=2.20
