@@ -1,5 +1,5 @@
-transformers==4.40.0
-datasets
+spaces
+git+https://github.com/huggingface/transformers.git
 pillow
 numpy
 torch
@@ -10,3 +10,11 @@ torchvision
 accelerate
 beautifulsoup4>=4.9
 requests>=2.20
+onnxruntime
+sentencepiece
+soxr
+pydub
+groq
+opencv-python
+qwen-vl-utils
+av
