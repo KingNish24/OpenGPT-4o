@@ -1,5 +1,18 @@
+---
+title: OpenGPT 4o
+emoji: 🔥
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: true
+short_description: GPT 4o like bot.
+header: mini
+---
+
 # OpenGPT-4o
-OpenGPT 4o is a free alternative to OpenAI GPT 4o
+OpenGPT 4o is a fee alternative to OpenAI GPT 4o
 
 Try HERE: https://huggingface.co/spaces/KingNish/GPT-4o
 
@@ -11,7 +24,8 @@ GPT 4o vs OpenGPT 4o
 | Image Generation      | Paid only                   | Yes                   |
 |Video Generation|No|Yes|
 | Image QnA  | Yes                   | Yes                   |
-| Voice Chat            | Yes but Very Limited           | Yes (Unlimited)                  |
+| Video QnA | Yes (but very limited) | Yes |
+| Voice Chat            | Paid Only           | Yes (Unlimited)                  |
 | Video Chat  | Paid Only | Yes |
 | Multilingual          | Yes                   | Chat Only                    |
 | Team Members          | 450+                  | 1 [LOL]                     |
@@ -19,4 +33,4 @@ GPT 4o vs OpenGPT 4o
 | Speed                 | 345 ms                | 2 second (Also Depends on queue)             |
 | Customization         | Limited               | High (Coming Soon)                 |
 | Learning Capability   | Continuous            | Static                |
-|Web Search|Yes|Yes|
+|Privacy|Questionable|100%|
