@@ -95,4 +95,4 @@ with gr.Blocks(theme=theme, title="OpenGPT 4o DEMO") as demo:
     )
 
 demo.queue(max_size=300)
-demo.launch()
+demo.launch(show_error=True)
